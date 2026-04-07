@@ -44,7 +44,7 @@ router.get('/my/memberships', requireAuth, async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch memberships' });
+    res.status(500).json({ error: 'Failed to fetch memberships', detail: err.message });
   }
 });
 

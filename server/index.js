@@ -16,6 +16,17 @@ app.get('/', (_req, res) => {
   res.json({ message: 'Salon App API running' });
 });
 
+// Temporary debug endpoint — remove after troubleshooting
+app.get('/api/debug/db', async (_req, res) => {
+  const db = require('./db');
+  try {
+    const r = await db.query('SELECT COUNT(*) FROM salons');
+    res.json({ ok: true, salon_count: r.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Global routes
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/salons',     require('./routes/salons')); // individual routes add requireAuth as needed
