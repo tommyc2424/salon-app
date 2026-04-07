@@ -22,33 +22,35 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Find or create the user
+    // 1. Find or create the user via Supabase admin API
     let customerId;
-    const { rows: existing } = await client.query(
-      'SELECT id FROM profiles WHERE id IN (SELECT id FROM auth.users WHERE email = $1)',
-      [email.toLowerCase()]
-    );
 
-    if (existing.length > 0) {
-      customerId = existing[0].id;
-    } else {
-      // Create a passwordless Supabase user via admin API
-      const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
-        email: email.toLowerCase(),
-        email_confirm: true,
-        user_metadata: { full_name },
-      });
-      if (authError) throw new Error(authError.message);
+    // Try creating — if email already exists, Supabase returns an error
+    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+      email: email.toLowerCase(),
+      email_confirm: true,
+      user_metadata: { full_name },
+    });
 
+    if (newUser?.user) {
       customerId = newUser.user.id;
-
-      // Create their profile
       await client.query(
         `INSERT INTO profiles (id, full_name, phone, role)
          VALUES ($1, $2, $3, 'customer')
          ON CONFLICT (id) DO UPDATE SET full_name = $2, phone = $3`,
         [customerId, full_name, phone || null]
       );
+    } else {
+      // User already exists — look up their profile
+      const { rows } = await client.query(
+        'SELECT id FROM profiles WHERE LOWER(full_name) = LOWER($1) OR id IN (SELECT id FROM profiles LIMIT 0)',
+        [full_name]
+      );
+      // Use Supabase admin to find by email
+      const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      const existing = users?.find(u => u.email === email.toLowerCase());
+      if (!existing) throw new Error('Could not find or create user');
+      customerId = existing.id;
     }
 
     // 2. Fetch services for price/duration

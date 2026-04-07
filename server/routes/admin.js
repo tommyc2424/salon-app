@@ -35,8 +35,7 @@ router.get('/bookings', async (req, res) => {
     let query = `
       SELECT b.*,
         json_build_object('id', s.id, 'full_name', s.full_name) AS staff,
-        json_build_object('id', p.id, 'full_name', p.full_name, 'email',
-          au.email, 'phone', p.phone) AS customer,
+        json_build_object('id', p.id, 'full_name', p.full_name, 'phone', p.phone) AS customer,
         (SELECT MAX(b2.starts_at) FROM bookings b2
          WHERE b2.customer_id = b.customer_id AND b2.salon_id = b.salon_id
            AND b2.starts_at < b.starts_at
@@ -47,7 +46,6 @@ router.get('/bookings', async (req, res) => {
       FROM bookings b
       LEFT JOIN staff s ON s.id = b.staff_id
       LEFT JOIN profiles p ON p.id = b.customer_id
-      LEFT JOIN auth.users au ON au.id = b.customer_id
       LEFT JOIN booking_services bs ON bs.booking_id = b.id
       LEFT JOIN services svc ON svc.id = bs.service_id
       WHERE b.salon_id = $1
@@ -56,7 +54,7 @@ router.get('/bookings', async (req, res) => {
     if (status)   { params.push(status);   query += ` AND b.status = $${params.length}`; }
     if (date)     { params.push(date);     query += ` AND b.starts_at::date = $${params.length}::date`; }
     if (staff_id) { params.push(staff_id); query += ` AND b.staff_id = $${params.length}`; }
-    query += ' GROUP BY b.id, s.id, p.id, au.email ORDER BY b.starts_at DESC';
+    query += ' GROUP BY b.id, s.id, p.id ORDER BY b.starts_at DESC';
     const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
