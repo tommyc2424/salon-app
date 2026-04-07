@@ -40,13 +40,15 @@ export default function SalonSettings({ salon, onClose }) {
   const [uploading, setUploading]       = useState(false);
 
   const [showTitle, setShowTitle]       = useState(salon.settings?.show_title !== false);
+  const [landingPage, setLandingPage]   = useState(salon.settings?.landing_page ?? 'login');
   const [primaryColor, setPrimaryColor] = useState(salon.settings?.primary_color ?? '#1a1a1a');
   const [fontFamily, setFontFamily]     = useState(salon.settings?.font_family ?? 'Inter');
   const [customColor, setCustomColor]   = useState(
     !COLOR_PRESETS.some(p => p.color === (salon.settings?.primary_color ?? '#1a1a1a'))
   );
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [copied, setCopied]   = useState(false);
 
   const isActive = currentSalon?.id === salon.salon_id;
 
@@ -106,7 +108,7 @@ export default function SalonSettings({ salon, onClose }) {
     try {
       const { logoUrl, changed: logoChanged } = await resolveLogoUrl();
 
-      const patchBody = { settings: { primary_color: primaryColor, font_family: fontFamily, show_title: showTitle } };
+      const patchBody = { settings: { primary_color: primaryColor, font_family: fontFamily, show_title: showTitle, landing_page: landingPage } };
       if (logoChanged) patchBody.logo_url = logoUrl; // only send logo_url when it changed
 
       await api.patch(`/api/salons/${salon.salon_id}`, patchBody);
@@ -115,7 +117,7 @@ export default function SalonSettings({ salon, onClose }) {
       if (isActive) {
         updateCurrentSalon(
           logoChanged ? { logo_url: logoUrl } : {},
-          { primary_color: primaryColor, font_family: fontFamily, show_title: showTitle }
+          { primary_color: primaryColor, font_family: fontFamily, show_title: showTitle, landing_page: landingPage }
         );
       }
 
@@ -259,6 +261,35 @@ export default function SalonSettings({ salon, onClose }) {
         </div>
       </div>
 
+      {/* Landing Page Mode */}
+      <div className="settings-section">
+        <label className="settings-label">Landing Page</label>
+        <p className="settings-hint">
+          Choose what visitors see when they scan your QR code or visit your salon link.
+        </p>
+        <div className="landing-toggle">
+          <button
+            className={`landing-toggle-btn ${landingPage === 'login' ? 'active' : ''}`}
+            style={landingPage === 'login' ? { background: primaryColor, color: '#fff' } : {}}
+            onClick={() => setLandingPage('login')}
+          >
+            Login Page
+          </button>
+          <button
+            className={`landing-toggle-btn ${landingPage === 'standard' ? 'active' : ''}`}
+            style={landingPage === 'standard' ? { background: primaryColor, color: '#fff' } : {}}
+            onClick={() => setLandingPage('standard')}
+          >
+            Standard Page
+          </button>
+        </div>
+        <p className="settings-hint" style={{ marginTop: '0.5rem' }}>
+          {landingPage === 'login'
+            ? 'Visitors must sign in before seeing your salon.'
+            : 'Visitors see your salon info and services without signing in.'}
+        </p>
+      </div>
+
       {/* QR Code */}
       {salon.slug && (
         <div className="settings-section">
@@ -269,7 +300,7 @@ export default function SalonSettings({ salon, onClose }) {
           <div className="qr-code-wrapper">
             <QRCodeCanvas
               id={`qr-${salon.salon_id}`}
-              value={`${window.location.origin}/s/${salon.slug}`}
+              value={`${window.location.origin}/${landingPage === 'standard' ? 'p' : 's'}/${salon.slug}`}
               size={160}
               fgColor={primaryColor}
               bgColor="#ffffff"
@@ -288,7 +319,18 @@ export default function SalonSettings({ salon, onClose }) {
               >
                 Download PNG
               </button>
-              <span className="settings-hint qr-url">{window.location.origin}/s/{salon.slug}</span>
+              <div className="qr-url-row">
+                <span className="settings-hint qr-url">{window.location.origin}/{landingPage === 'standard' ? 'p' : 's'}/{salon.slug}</span>
+                <button
+                  className="btn-secondary btn-copy"
+                  onClick={() => {
+                    const url = `${window.location.origin}/${landingPage === 'standard' ? 'p' : 's'}/${salon.slug}`;
+                    navigator.clipboard.writeText(url);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >{copied ? 'Copied!' : 'Copy'}</button>
+              </div>
             </div>
           </div>
         </div>

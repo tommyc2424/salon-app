@@ -11,12 +11,24 @@ const STATUS_COLORS = {
 };
 const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'no_show', 'cancelled'];
 
+function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? '1 month ago' : `${months} months ago`;
+}
+
 export default function AdminBookings() {
   const { currentSalon } = useSalon();
-  const [bookings, setBookings] = useState([]);
-  const [staff, setStaff]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [filters, setFilters]   = useState({ status: '', date: '', staff_id: '' });
+  const [bookings, setBookings]   = useState([]);
+  const [staff, setStaff]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [filters, setFilters]     = useState({ status: '', date: '', staff_id: '' });
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     if (!currentSalon) return;
@@ -76,31 +88,74 @@ export default function AdminBookings() {
       ) : (
         <div className="booking-list">
           {bookings.map(b => (
-            <div key={b.id} className="booking-item">
-              <div className="booking-date-col">
-                <div className="booking-month">{new Date(b.starts_at).toLocaleDateString('en-US', { month: 'short' })}</div>
-                <div className="booking-day">{new Date(b.starts_at).getDate()}</div>
-              </div>
-              <div className="booking-info">
-                <div className="booking-services">
-                  {b.services.map((s, i) => <span key={i} className="tag">{s.name}</span>)}
+            <div key={b.id} className={`booking-item-wrap ${expandedId === b.id ? 'expanded' : ''}`}>
+              <div className="booking-item" onClick={() => setExpandedId(prev => prev === b.id ? null : b.id)}>
+                <div className="booking-date-col">
+                  <div className="booking-month">{new Date(b.starts_at).toLocaleDateString('en-US', { month: 'short' })}</div>
+                  <div className="booking-day">{new Date(b.starts_at).getDate()}</div>
                 </div>
-                <div className="booking-meta">
-                  <span>{new Date(b.starts_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                  {b.staff?.full_name && <span>{b.staff.full_name}</span>}
-                  <span>${Number(b.total_price).toFixed(2)}</span>
+                <div className="booking-info">
+                  <div className="booking-client-name">{b.customer?.full_name || 'Unknown'}</div>
+                  <div className="booking-services">
+                    {b.services.map((s, i) => <span key={i} className="tag">{s.name}</span>)}
+                  </div>
+                  <div className="booking-meta">
+                    <span>{new Date(b.starts_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {b.staff?.full_name && <span>{b.staff.full_name}</span>}
+                    <span>${Number(b.total_price).toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="booking-status-col" onClick={e => e.stopPropagation()}>
+                  <select
+                    className="status-select"
+                    value={b.status}
+                    style={{ borderColor: STATUS_COLORS[b.status] }}
+                    onChange={e => updateStatus(b.id, e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="booking-status-col">
-                <select
-                  className="status-select"
-                  value={b.status}
-                  style={{ borderColor: STATUS_COLORS[b.status] }}
-                  onChange={e => updateStatus(b.id, e.target.value)}
-                >
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
+
+              {expandedId === b.id && (
+                <div className="booking-details">
+                  <div className="booking-details-grid">
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Client</span>
+                      <span>{b.customer?.full_name || '—'}</span>
+                    </div>
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Email</span>
+                      <span>{b.customer?.email || '—'}</span>
+                    </div>
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Phone</span>
+                      <span>{b.customer?.phone || '—'}</span>
+                    </div>
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Previous Visit</span>
+                      <span>{b.last_visit ? timeAgo(b.last_visit) : 'First visit'}</span>
+                    </div>
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Booked</span>
+                      <span>{new Date(b.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                    <div className="booking-detail">
+                      <span className="booking-detail-label">Duration</span>
+                      <span>{(() => {
+                        const mins = Math.round((new Date(b.ends_at) - new Date(b.starts_at)) / 60000);
+                        return `${mins} min`;
+                      })()}</span>
+                    </div>
+                  </div>
+                  {b.notes && (
+                    <div className="booking-detail" style={{ marginTop: '0.5rem' }}>
+                      <span className="booking-detail-label">Notes</span>
+                      <span>{b.notes}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

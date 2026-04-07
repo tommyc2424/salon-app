@@ -22,7 +22,7 @@ router.get('/my/memberships', requireAuth, async (req, res) => {
     let result;
     try {
       result = await db.query(
-        `SELECT sm.role, sm.salon_id, s.name, s.slug, s.logo_url, s.address, s.settings
+        `SELECT sm.role, sm.salon_id, s.name, s.slug, s.logo_url, s.description, s.address, s.phone, s.email, s.settings
          FROM salon_memberships sm
          JOIN salons s ON s.id = sm.salon_id
          WHERE sm.profile_id = $1 AND sm.is_active = true
@@ -32,7 +32,7 @@ router.get('/my/memberships', requireAuth, async (req, res) => {
     } catch {
       // settings column not yet migrated — fall back gracefully
       result = await db.query(
-        `SELECT sm.role, sm.salon_id, s.name, s.slug, s.logo_url, s.address
+        `SELECT sm.role, sm.salon_id, s.name, s.slug, s.logo_url, s.description, s.address, s.phone, s.email
          FROM salon_memberships sm
          JOIN salons s ON s.id = sm.salon_id
          WHERE sm.profile_id = $1 AND sm.is_active = true

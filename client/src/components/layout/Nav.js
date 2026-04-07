@@ -30,8 +30,6 @@ export default function Nav() {
         {isAdmin && <>
           <NavLink to="/admin" end>Dashboard</NavLink>
           <NavLink to="/admin/bookings">Bookings</NavLink>
-          <NavLink to="/admin/services">Services</NavLink>
-          <NavLink to="/admin/staff">Staff</NavLink>
           <NavLink to="/admin/clients">Clients</NavLink>
           <NavLink to="/admin/salons">My Salons</NavLink>
         </>}

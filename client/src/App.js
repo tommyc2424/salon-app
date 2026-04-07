@@ -15,6 +15,7 @@ import AdminStaff      from './pages/admin/AdminStaff';
 import AdminSalons     from './pages/admin/AdminSalons';
 import AdminClients    from './pages/admin/AdminClients';
 import SalonLanding    from './pages/SalonLanding';
+import PublicLanding   from './pages/PublicLanding';
 import './App.css';
 
 function AppRoutes() {
@@ -22,7 +23,17 @@ function AppRoutes() {
   const { salonRole, loading: salonLoading } = useSalon();
 
   if (authLoading || salonLoading) return <div className="loading">Loading...</div>;
-  if (!user) return <AuthPage />;
+
+  // Public landing page — accessible without login
+  if (!user) return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/p/:slug" element={<PublicLanding />} />
+        <Route path="/s/:slug" element={<AuthPage />} />
+        <Route path="*" element={<AuthPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
 
   const isAdmin = salonRole === 'owner' || salonRole === 'admin';
   const isStaff = salonRole === 'staff';
@@ -37,8 +48,6 @@ function AppRoutes() {
           {isAdmin && <>
             <Route path="/admin"           element={<AdminDashboard />} />
             <Route path="/admin/bookings"  element={<AdminBookings />} />
-            <Route path="/admin/services"  element={<AdminServices />} />
-            <Route path="/admin/staff"     element={<AdminStaff />} />
             <Route path="/admin/clients"   element={<AdminClients />} />
             <Route path="/admin/salons"    element={<AdminSalons />} />
             <Route path="/"                element={<Navigate to="/admin" />} />

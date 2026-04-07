@@ -28,6 +28,7 @@ const salonRouter = express.Router({ mergeParams: true });
 salonRouter.use('/services',     require('./routes/services'));
 salonRouter.use('/staff',        require('./routes/staff'));
 salonRouter.use('/availability', require('./routes/availability'));
+salonRouter.use('/book-guest',   require('./routes/guestBooking'));
 salonRouter.use('/bookings',     requireAuth, require('./routes/bookings'));
 salonRouter.use('/payments',     requireAuth, require('./routes/payments'));
 salonRouter.use('/admin',

@@ -2,8 +2,23 @@ import { useState } from 'react';
 import { api } from '../../lib/api';
 import { useSalon } from '../../context/SalonContext';
 import SalonSettings from './SalonSettings';
+import AdminServices from './AdminServices';
+import AdminStaff from './AdminStaff';
+import AboutUsSettings from './AboutUsSettings';
+import HomePageSettings from './HomePageSettings';
 
 const EMPTY = { name: '', slug: '', description: '', address: '', phone: '', email: '' };
+
+const SALON_TABS = [
+  { id: 'settings',  label: 'Webpage Settings' },
+  { id: 'services',  label: 'Services' },
+  { id: 'staff',     label: 'Staff' },
+  { id: 'home',      label: 'Home Page' },
+  { id: 'about',     label: 'About Us' },
+  { id: 'gifts',     label: 'Gift Cards' },
+  { id: 'careers',   label: 'Careers' },
+  { id: 'contact',   label: 'Contact' },
+];
 
 export default function AdminSalons() {
   const { memberships, currentSalon, switchSalon } = useSalon();
@@ -12,12 +27,18 @@ export default function AdminSalons() {
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [selectedSalonId, setSelectedSalonId] = useState(null);
+  const [activeTab, setActiveTab]       = useState('settings');
 
   const mySalons = memberships.filter(m => m.role === 'owner' || m.role === 'admin');
   const selectedSalon = mySalons.find(m => m.salon_id === selectedSalonId) ?? null;
 
   function toggleSettings(salonId) {
-    setSelectedSalonId(prev => prev === salonId ? null : salonId);
+    if (selectedSalonId === salonId) {
+      setSelectedSalonId(null);
+    } else {
+      setSelectedSalonId(salonId);
+      setActiveTab('settings');
+    }
   }
 
   async function handleCreate(e) {
@@ -122,10 +143,69 @@ export default function AdminSalons() {
             </div>
 
             {selectedSalonId === m.salon_id && selectedSalon && (
-              <SalonSettings
-                salon={selectedSalon}
-                onClose={() => setSelectedSalonId(null)}
-              />
+              <div className="salon-expanded">
+                <div className="salon-tabs">
+                  {SALON_TABS.map(t => (
+                    <button
+                      key={t.id}
+                      className={`salon-tab ${activeTab === t.id ? 'active' : ''}`}
+                      onClick={() => setActiveTab(t.id)}
+                    >{t.label}</button>
+                  ))}
+                </div>
+
+                <div className="salon-tab-content">
+                  {activeTab === 'settings' && (
+                    <SalonSettings salon={selectedSalon} onClose={() => setSelectedSalonId(null)} />
+                  )}
+
+                  {activeTab === 'services' && (
+                    <AdminServices embedded salonId={m.salon_id} />
+                  )}
+
+                  {activeTab === 'staff' && (
+                    <AdminStaff embedded salonId={m.salon_id} />
+                  )}
+
+                  {activeTab === 'home' && (
+                    <HomePageSettings salon={selectedSalon} />
+                  )}
+
+                  {activeTab === 'about' && (
+                    <AboutUsSettings salon={selectedSalon} />
+                  )}
+
+                  {activeTab === 'gifts' && (
+                    <div className="salon-page-settings">
+                      <h3>Gift Cards</h3>
+                      <p className="settings-hint">Configure your gift card page content.</p>
+                      <div className="public-placeholder">
+                        <p>The gift cards page currently displays a default message directing visitors to contact you by phone. Custom content is coming soon.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'careers' && (
+                    <div className="salon-page-settings">
+                      <h3>Career Opportunities</h3>
+                      <p className="settings-hint">Configure your careers page content.</p>
+                      <div className="public-placeholder">
+                        <p>The careers page currently displays a default message directing applicants to email you. Custom content is coming soon.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'contact' && (
+                    <div className="salon-page-settings">
+                      <h3>Contact Us</h3>
+                      <p className="settings-hint">This page shows your salon's address, phone, and email.</p>
+                      <div className="public-placeholder">
+                        <p>Update your contact info in the <button className="link-btn" onClick={() => setActiveTab('settings')}>Webpage Settings</button> tab.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ))}

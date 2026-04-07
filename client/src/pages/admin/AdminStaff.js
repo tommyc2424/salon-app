@@ -1,53 +1,111 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import { useSalon } from '../../context/SalonContext';
 
-const EMPTY = { full_name: '', bio: '', avatar_url: '' };
+const EMPTY = { full_name: '', bio: '' };
 
-export default function AdminStaff() {
+export default function AdminStaff({ embedded, salonId: propSalonId }) {
   const { currentSalon } = useSalon();
+  const salonId = propSalonId ?? currentSalon?.id;
   const [staff, setStaff]       = useState([]);
   const [form, setForm]         = useState(EMPTY);
   const [editing, setEditing]   = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading]   = useState(true);
 
-  useEffect(() => {
-    if (!currentSalon) return;
-    api.get(`/api/salons/${currentSalon.id}/admin/staff`).then(setStaff).finally(() => setLoading(false));
-  }, [currentSalon?.id]);
+  // Photo state: 'keep' | 'remove' | File
+  const [photoState, setPhotoState]     = useState('keep');
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [uploading, setUploading]       = useState(false);
+  const fileInputRef = useRef(null);
 
-  function openNew() { setForm(EMPTY); setEditing(null); setShowForm(true); }
+  useEffect(() => {
+    if (!salonId) return;
+    api.get(`/api/salons/${salonId}/admin/staff`).then(setStaff).finally(() => setLoading(false));
+  }, [salonId]);
+
+  function openNew() {
+    setForm(EMPTY); setEditing(null); setShowForm(true);
+    setPhotoState('keep'); setPhotoPreview('');
+  }
   function openEdit(s) {
-    setForm({ full_name: s.full_name, bio: s.bio ?? '', avatar_url: s.avatar_url ?? '' });
+    setForm({ full_name: s.full_name, bio: s.bio ?? '' });
     setEditing(s.id);
     setShowForm(true);
+    setPhotoState('keep');
+    setPhotoPreview(s.avatar_url ?? '');
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoState(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
+
+  function removePhoto() {
+    setPhotoState('remove');
+    setPhotoPreview('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function resolveAvatarUrl(staffId) {
+    if (photoState === 'keep')   return null; // no change
+    if (photoState === 'remove') return '';   // explicit clear
+
+    setUploading(true);
+    try {
+      const file = photoState;
+      const ext  = file.name.split('.').pop().toLowerCase();
+      const path = `staff-${staffId}.${ext}`;
+      const { error } = await supabase.storage
+        .from('salon-logos')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw new Error(error.message);
+      const { data: { publicUrl } } = supabase.storage
+        .from('salon-logos')
+        .getPublicUrl(path);
+      return publicUrl;
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const base = `/api/salons/${currentSalon.id}/admin`;
+    const base = `/api/salons/${salonId}/admin`;
     if (editing) {
-      const updated = await api.patch(`${base}/staff/${editing}`, form);
+      const avatarUrl = await resolveAvatarUrl(editing);
+      const body = { ...form };
+      if (avatarUrl !== null) body.avatar_url = avatarUrl || null;
+      const updated = await api.patch(`${base}/staff/${editing}`, body);
       setStaff(prev => prev.map(s => s.id === editing ? { ...s, ...updated } : s));
     } else {
       const created = await api.post(`${base}/staff`, form);
-      setStaff(prev => [...prev, created]);
+      // Upload photo for new staff using the returned id
+      const avatarUrl = await resolveAvatarUrl(created.id);
+      if (avatarUrl) {
+        const patched = await api.patch(`${base}/staff/${created.id}`, { avatar_url: avatarUrl });
+        setStaff(prev => [...prev, { ...created, ...patched }]);
+      } else {
+        setStaff(prev => [...prev, created]);
+      }
     }
     setShowForm(false);
   }
 
   async function toggleActive(s) {
-    const updated = await api.patch(`/api/salons/${currentSalon.id}/admin/staff/${s.id}`, { is_active: !s.is_active });
+    const updated = await api.patch(`/api/salons/${salonId}/admin/staff/${s.id}`, { is_active: !s.is_active });
     setStaff(prev => prev.map(x => x.id === s.id ? { ...x, ...updated } : x));
   }
 
-  if (loading) return <div className="page"><p>Loading…</p></div>;
+  if (loading) return <div className={embedded ? '' : 'page'}><p>Loading…</p></div>;
 
   return (
-    <div className="page">
+    <div className={embedded ? '' : 'page'}>
       <div className="page-header">
-        <h1>Staff</h1>
+        {embedded ? <h3>Staff</h3> : <h1>Staff</h1>}
         <button className="btn-primary" onClick={openNew}>+ Add Staff</button>
       </div>
 
@@ -64,12 +122,38 @@ export default function AdminStaff() {
               <textarea rows={3} value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} />
             </div>
             <div className="form-row">
-              <label>Avatar URL</label>
-              <input value={form.avatar_url} onChange={e => setForm(f => ({ ...f, avatar_url: e.target.value }))} />
+              <label>Photo</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+              <div className="staff-photo-upload">
+                {photoPreview ? (
+                  <div className="staff-photo-preview">
+                    <img src={photoPreview} alt="Staff" className="staff-photo-img" />
+                    <div className="staff-photo-actions">
+                      <button type="button" className="action-btn" onClick={() => fileInputRef.current.click()}>Change</button>
+                      <button type="button" className="action-btn danger" onClick={removePhoto}>Remove</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="logo-upload-dropzone" onClick={() => fileInputRef.current.click()}>
+                    <span className="logo-upload-icon">↑</span>
+                    <span>Upload photo</span>
+                    <span className="settings-hint">PNG, JPG, WebP</span>
+                  </button>
+                )}
+                {uploading && <p className="settings-hint">Uploading…</p>}
+              </div>
             </div>
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button type="submit" className="btn-primary">{editing ? 'Save' : 'Create'}</button>
+              <button type="submit" className="btn-primary" disabled={uploading}>
+                {uploading ? 'Uploading…' : editing ? 'Save' : 'Create'}
+              </button>
             </div>
           </form>
         </div>
@@ -78,7 +162,9 @@ export default function AdminStaff() {
       <div className="staff-admin-grid">
         {staff.map(s => (
           <div key={s.id} className={`staff-admin-card ${!s.is_active ? 'inactive' : ''}`}>
-            <div className="staff-avatar">{s.full_name[0]}</div>
+            <div className="staff-avatar">
+              {s.avatar_url ? <img src={s.avatar_url} alt={s.full_name} className="staff-avatar-img" /> : s.full_name[0]}
+            </div>
             <div className="staff-admin-info">
               <h3>{s.full_name}</h3>
               <p>{s.bio}</p>

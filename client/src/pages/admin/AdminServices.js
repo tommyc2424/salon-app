@@ -4,8 +4,9 @@ import { useSalon } from '../../context/SalonContext';
 
 const EMPTY = { name: '', description: '', price: '', duration_minutes: 60, category_id: '', is_active: true };
 
-export default function AdminServices() {
+export default function AdminServices({ embedded, salonId: propSalonId }) {
   const { currentSalon } = useSalon();
+  const salonId = propSalonId ?? currentSalon?.id;
   const [services, setServices]     = useState([]);
   const [categories, setCategories] = useState([]);
   const [form, setForm]             = useState(EMPTY);
@@ -14,15 +15,15 @@ export default function AdminServices() {
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
-    if (!currentSalon) return;
+    if (!salonId) return;
     Promise.all([
-      api.get(`/api/salons/${currentSalon.id}/admin/services`),
+      api.get(`/api/salons/${salonId}/admin/services`),
       api.get('/api/categories'),
     ]).then(([svcs, cats]) => {
       setServices(svcs);
       setCategories(cats);
     }).finally(() => setLoading(false));
-  }, [currentSalon?.id]);
+  }, [salonId]);
 
   function openNew() { setForm(EMPTY); setEditing(null); setShowForm(true); }
   function openEdit(s) {
@@ -33,7 +34,7 @@ export default function AdminServices() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const base = `/api/salons/${currentSalon.id}/admin`;
+    const base = `/api/salons/${salonId}/admin`;
     const payload = { ...form, price: parseFloat(form.price), duration_minutes: parseInt(form.duration_minutes), category_id: form.category_id || null };
     if (editing) {
       const updated = await api.patch(`${base}/services/${editing}`, payload);
@@ -46,22 +47,22 @@ export default function AdminServices() {
   }
 
   async function toggleActive(s) {
-    const updated = await api.patch(`/api/salons/${currentSalon.id}/admin/services/${s.id}`, { is_active: !s.is_active });
+    const updated = await api.patch(`/api/salons/${salonId}/admin/services/${s.id}`, { is_active: !s.is_active });
     setServices(prev => prev.map(x => x.id === s.id ? { ...x, ...updated } : x));
   }
 
   async function deleteService(id) {
     if (!window.confirm('Delete this service?')) return;
-    await api.delete(`/api/salons/${currentSalon.id}/admin/services/${id}`);
+    await api.delete(`/api/salons/${salonId}/admin/services/${id}`);
     setServices(prev => prev.filter(s => s.id !== id));
   }
 
-  if (loading) return <div className="page"><p>Loading...</p></div>;
+  if (loading) return <div className={embedded ? '' : 'page'}><p>Loading...</p></div>;
 
   return (
-    <div className="page">
+    <div className={embedded ? '' : 'page'}>
       <div className="page-header">
-        <h1>Services</h1>
+        {embedded ? <h3>Services</h3> : <h1>Services</h1>}
         <button className="btn-primary" onClick={openNew}>+ Add Service</button>
       </div>
 

@@ -35,11 +35,19 @@ router.get('/bookings', async (req, res) => {
     let query = `
       SELECT b.*,
         json_build_object('id', s.id, 'full_name', s.full_name) AS staff,
+        json_build_object('id', p.id, 'full_name', p.full_name, 'email',
+          au.email, 'phone', p.phone) AS customer,
+        (SELECT MAX(b2.starts_at) FROM bookings b2
+         WHERE b2.customer_id = b.customer_id AND b2.salon_id = b.salon_id
+           AND b2.starts_at < b.starts_at
+           AND b2.status NOT IN ('cancelled', 'no_show')) AS last_visit,
         COALESCE(json_agg(
           json_build_object('name', svc.name, 'price', bs.price_at_booking)
         ) FILTER (WHERE bs.id IS NOT NULL), '[]') AS services
       FROM bookings b
       LEFT JOIN staff s ON s.id = b.staff_id
+      LEFT JOIN profiles p ON p.id = b.customer_id
+      LEFT JOIN auth.users au ON au.id = b.customer_id
       LEFT JOIN booking_services bs ON bs.booking_id = b.id
       LEFT JOIN services svc ON svc.id = bs.service_id
       WHERE b.salon_id = $1
@@ -48,7 +56,7 @@ router.get('/bookings', async (req, res) => {
     if (status)   { params.push(status);   query += ` AND b.status = $${params.length}`; }
     if (date)     { params.push(date);     query += ` AND b.starts_at::date = $${params.length}::date`; }
     if (staff_id) { params.push(staff_id); query += ` AND b.staff_id = $${params.length}`; }
-    query += ' GROUP BY b.id, s.id ORDER BY b.starts_at DESC';
+    query += ' GROUP BY b.id, s.id, p.id, au.email ORDER BY b.starts_at DESC';
     const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
@@ -184,16 +192,18 @@ router.post('/staff', async (req, res) => {
 // PATCH /staff/:id
 router.patch('/staff/:id', async (req, res) => {
   const { salonId } = req.params;
-  const { full_name, bio, avatar_url, is_active } = req.body;
+  const { full_name, bio, is_active } = req.body;
+  const hasAvatar = 'avatar_url' in req.body;
+  const avatar_url = req.body.avatar_url ?? null;
   try {
     const result = await db.query(
       `UPDATE staff SET
          full_name  = COALESCE($1, full_name),
          bio        = COALESCE($2, bio),
-         avatar_url = COALESCE($3, avatar_url),
-         is_active  = COALESCE($4, is_active)
-       WHERE id = $5 AND salon_id = $6 RETURNING *`,
-      [full_name, bio, avatar_url, is_active, req.params.id, salonId]
+         avatar_url = CASE WHEN $3 THEN $4 ELSE avatar_url END,
+         is_active  = COALESCE($5, is_active)
+       WHERE id = $6 AND salon_id = $7 RETURNING *`,
+      [full_name, bio, hasAvatar, avatar_url, is_active, req.params.id, salonId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
