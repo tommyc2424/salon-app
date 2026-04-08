@@ -121,6 +121,8 @@ export default function PublicLanding() {
 
   async function handleGuestSubmit() {
     setBookError('');
+    if (!selectedServices.length) { setBookError('Please select at least one service.'); return; }
+    if (!guestEmail || !guestName) { setBookError('Name and email are required.'); return; }
     setSubmitting(true);
     try {
       await api.post(`/api/salons/${salon.id}/book-guest`, {
@@ -151,17 +153,32 @@ export default function PublicLanding() {
     <div className="public-landing">
       {/* Navigation */}
       <nav className="public-nav" style={{ borderBottomColor: color }}>
-        <div className="public-nav-brand" onClick={() => goToSection('home')} style={{ cursor: 'pointer' }}>
-          {salon.logo_url && <img src={salon.logo_url} alt={salon.name} className="public-nav-logo" />}
-          <span style={{ fontFamily: font, color }}>{salon.name}</span>
+        <div className="public-nav-top">
+          <div className="public-nav-brand" onClick={() => goToSection('home')} style={{ cursor: 'pointer' }}>
+            {salon.logo_url && <img src={salon.logo_url} alt={salon.name} className="public-nav-logo" />}
+            <span style={{ fontFamily: font, color }}>{salon.name}</span>
+          </div>
+          <div className="public-nav-actions">
+            <a
+              href="#"
+              className="public-nav-book"
+              style={{ background: color }}
+              onClick={e => { e.preventDefault(); startBooking(); }}
+            >Book Now</a>
+            <a
+              href="#"
+              className="public-nav-login"
+              onClick={e => { e.preventDefault(); navigate(`/s/${slug}`); }}
+            >Log In</a>
+          </div>
+          <button
+            className="public-nav-toggle"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? '✕' : '☰'}
+          </button>
         </div>
-        <button
-          className="public-nav-toggle"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Menu"
-        >
-          {mobileMenuOpen ? '✕' : '☰'}
-        </button>
         <div className={`public-nav-links ${mobileMenuOpen ? 'open' : ''}`}>
           {NAV_SECTIONS.map(s => (
             <a
@@ -172,17 +189,6 @@ export default function PublicLanding() {
               onClick={e => { e.preventDefault(); goToSection(s.id); }}
             >{s.label}</a>
           ))}
-          <a
-            href="#"
-            className="public-nav-book"
-            style={{ background: color }}
-            onClick={e => { e.preventDefault(); startBooking(); }}
-          >Book Now</a>
-          <a
-            href="#"
-            className="public-nav-login"
-            onClick={e => { e.preventDefault(); navigate(`/s/${slug}`); }}
-          >Log In</a>
         </div>
       </nav>
 
@@ -437,7 +443,12 @@ export default function PublicLanding() {
                   })()}
 
                   {/* Step 1: Staff */}
-                  {bookStep === 1 && (
+                  {bookStep === 1 && (() => {
+                    const selectedSvcIds = new Set(selectedServices.map(s => s.id));
+                    const eligibleStaff = staff.filter(s =>
+                      s.services?.some(svc => selectedSvcIds.has(svc.id))
+                    );
+                    return (
                     <div>
                       <div className="step-title-row">
                         <h3>Choose a Stylist</h3>
@@ -452,7 +463,7 @@ export default function PublicLanding() {
                           <h3>No Preference</h3>
                           <p>We'll assign the best available stylist</p>
                         </div>
-                        {staff.map(s => (
+                        {eligibleStaff.map(s => (
                           <div key={s.id} className={`staff-card ${selectedStaff?.id === s.id ? 'selected' : ''}`} onClick={() => pickStaff(s)}>
                             <div className="staff-avatar">
                               {s.avatar_url ? <img src={s.avatar_url} alt={s.full_name} className="staff-avatar-img" /> : s.full_name[0]}
@@ -463,7 +474,8 @@ export default function PublicLanding() {
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Step 2: Date & Time */}
                   {bookStep === 2 && (

@@ -172,7 +172,12 @@ export default function BookingFlow() {
         )}
 
         {/* STEP 1: Staff */}
-        {step === 1 && (
+        {step === 1 && (() => {
+          const selectedSvcIds = new Set(selectedServices.map(s => s.id));
+          const eligibleStaff = staff.filter(s =>
+            s.services?.some(svc => selectedSvcIds.has(svc.id))
+          );
+          return (
           <div>
             <div className="step-title-row">
               <h2>Choose a Staff Member</h2>
@@ -190,7 +195,7 @@ export default function BookingFlow() {
                 <h3>No Preference</h3>
                 <p>We'll assign the best available stylist</p>
               </div>
-              {staff.map(s => (
+              {eligibleStaff.map(s => (
                 <div
                   key={s.id}
                   className={`staff-card ${selectedStaff?.id === s.id ? 'selected' : ''}`}
@@ -203,7 +208,8 @@ export default function BookingFlow() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* STEP 2: Date & Time */}
         {step === 2 && (

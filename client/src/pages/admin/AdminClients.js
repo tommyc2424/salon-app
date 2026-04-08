@@ -20,17 +20,46 @@ function futureDate(dateStr) {
 }
 
 export default function AdminClients() {
-  const { currentSalon } = useSalon();
+  const { currentSalon, isAllSalons, memberships } = useSalon();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
 
   useEffect(() => {
     if (!currentSalon) return;
-    api.get(`/api/salons/${currentSalon.id}/admin/clients`)
-      .then(setClients)
-      .finally(() => setLoading(false));
-  }, [currentSalon?.id]);
+    setLoading(true);
+    setClients([]);
+    setSearch('');
+    if (isAllSalons) {
+      const adminSalons = memberships.filter(m => m.role === 'owner' || m.role === 'admin');
+      Promise.all(adminSalons.map(m =>
+        api.get(`/api/salons/${m.salon_id}/admin/clients`).then(clients =>
+          clients.map(c => ({ ...c, salon_name: m.name }))
+        ).catch(() => [])
+      ))
+        .then(results => {
+          // Dedupe clients by id, merge stats
+          const map = new Map();
+          results.flat().forEach(c => {
+            if (map.has(c.id)) {
+              const prev = map.get(c.id);
+              prev.visit_count = (Number(prev.visit_count) || 0) + (Number(c.visit_count) || 0);
+              prev.total_spent = (Number(prev.total_spent) || 0) + (Number(c.total_spent) || 0);
+              if (c.last_visit && (!prev.last_visit || new Date(c.last_visit) > new Date(prev.last_visit))) prev.last_visit = c.last_visit;
+              if (c.next_appointment && (!prev.next_appointment || new Date(c.next_appointment) < new Date(prev.next_appointment))) prev.next_appointment = c.next_appointment;
+            } else {
+              map.set(c.id, { ...c });
+            }
+          });
+          setClients([...map.values()]);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      api.get(`/api/salons/${currentSalon.id}/admin/clients`)
+        .then(setClients)
+        .finally(() => setLoading(false));
+    }
+  }, [currentSalon?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = clients.filter(c =>
     c.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -63,6 +92,7 @@ export default function AdminClients() {
                 {c.full_name ? c.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?'}
               </div>
               <div className="client-info">
+                {isAllSalons && c.salon_name && <span className="client-salon-name">{c.salon_name}</span>}
                 <h3 className="client-name">{c.full_name ?? 'Unknown'}</h3>
                 {c.phone && <p className="client-phone">{c.phone}</p>}
               </div>

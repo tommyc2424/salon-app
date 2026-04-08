@@ -23,16 +23,26 @@ function timeAgo(dateStr) {
 }
 
 export default function AdminBookings() {
-  const { currentSalon } = useSalon();
+  const { currentSalon, isAllSalons, memberships } = useSalon();
   const [bookings, setBookings]   = useState([]);
   const [staff, setStaff]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [filters, setFilters]     = useState({ status: '', date: '', staff_id: '' });
   const [expandedId, setExpandedId] = useState(null);
 
+  const adminSalons = memberships.filter(m => m.role === 'owner' || m.role === 'admin');
+
   useEffect(() => {
     if (!currentSalon) return;
-    api.get(`/api/salons/${currentSalon.id}/admin/staff`).then(setStaff);
+    setFilters({ status: '', date: '', staff_id: '' });
+    setBookings([]);
+    setStaff([]);
+    if (isAllSalons) {
+      Promise.all(adminSalons.map(m => api.get(`/api/salons/${m.salon_id}/admin/staff`)))
+        .then(results => setStaff(results.flat()));
+    } else {
+      api.get(`/api/salons/${currentSalon.id}/admin/staff`).then(setStaff);
+    }
     loadBookings({});
   }, [currentSalon?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -43,8 +53,18 @@ export default function AdminBookings() {
     if (f.status)   params.set('status',   f.status);
     if (f.date)     params.set('date',     f.date);
     if (f.staff_id) params.set('staff_id', f.staff_id);
-    const data = await api.get(`/api/salons/${currentSalon.id}/admin/bookings?${params}`).catch(() => []);
-    setBookings(data);
+
+    if (isAllSalons) {
+      const results = await Promise.all(
+        adminSalons.map(m => api.get(`/api/salons/${m.salon_id}/admin/bookings?${params}`).catch(() => []))
+      );
+      const all = results.flat();
+      all.sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+      setBookings(all);
+    } else {
+      const data = await api.get(`/api/salons/${currentSalon.id}/admin/bookings?${params}`).catch(() => []);
+      setBookings(data);
+    }
     setLoading(false);
   }
 
@@ -55,7 +75,8 @@ export default function AdminBookings() {
   }
 
   async function updateStatus(id, status) {
-    await api.patch(`/api/salons/${currentSalon.id}/admin/bookings/${id}/status`, { status });
+    const salonId = isAllSalons ? bookings.find(b => b.id === id)?.salon_id : currentSalon.id;
+    await api.patch(`/api/salons/${salonId}/admin/bookings/${id}/status`, { status });
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
   }
 
@@ -95,6 +116,7 @@ export default function AdminBookings() {
                   <div className="booking-day">{new Date(b.starts_at).getDate()}</div>
                 </div>
                 <div className="booking-info">
+                  {isAllSalons && <div className="booking-salon-name">{memberships.find(m => m.salon_id === b.salon_id)?.name}</div>}
                   <div className="booking-client-name">{b.customer?.full_name || 'Unknown'}</div>
                   <div className="booking-services">
                     {b.services.map((s, i) => <span key={i} className="tag">{s.name}</span>)}

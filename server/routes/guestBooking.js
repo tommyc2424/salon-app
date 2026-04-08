@@ -22,10 +22,11 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Find or create the user via Supabase admin API
+    // 1. Find or create the user
     let customerId;
 
-    // Try creating — if email already exists, Supabase returns an error
+    // Check if profile already exists by looking up email in profiles via a join-free approach
+    // First try to create — if user exists, Supabase returns an error we handle
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
       email: email.toLowerCase(),
       email_confirm: true,
@@ -33,6 +34,7 @@ router.post('/', async (req, res) => {
     });
 
     if (newUser?.user) {
+      // New user created
       customerId = newUser.user.id;
       await client.query(
         `INSERT INTO profiles (id, full_name, phone, role)
@@ -40,12 +42,28 @@ router.post('/', async (req, res) => {
          ON CONFLICT (id) DO UPDATE SET full_name = $2, phone = $3`,
         [customerId, full_name, phone || null]
       );
-    } else {
-      // User already exists — look up via listUsers
-      const { data: allUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const existing = allUsers?.users?.find(u => u.email === email.toLowerCase());
-      if (!existing) throw new Error(createError?.message || 'Could not find or create user');
-      customerId = existing.id;
+    } else if (createError) {
+      // User already exists — page through REST API to find them
+      // Note: per_page > 5 causes 500 on this Supabase instance
+      let found = null;
+      for (let page = 1; !found && page <= 100; page++) {
+        const resp = await fetch(
+          `${process.env.SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=5`,
+          { headers: {
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          }}
+        );
+        const data = await resp.json();
+        const users = data.users ?? [];
+        found = users.find(u => u.email === email.toLowerCase());
+        if (users.length < 5) break; // last page
+      }
+      if (found) {
+        customerId = found.id;
+      } else {
+        throw new Error('Could not find or create user account');
+      }
     }
 
     // 2. Fetch services for price/duration

@@ -14,26 +14,54 @@ const STATUS_COLORS = {
 const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'no_show', 'cancelled'];
 
 export default function AdminDashboard() {
-  const { currentSalon, salonRole } = useSalon();
+  const { currentSalon, salonRole, isAllSalons, memberships } = useSalon();
   const [stats, setStats]       = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     if (!currentSalon) return;
+    setLoading(true);
+    setStats(null);
+    setBookings([]);
     const today = new Date().toISOString().split('T')[0];
-    const base = `/api/salons/${currentSalon.id}/admin`;
-    Promise.all([
-      api.get(`${base}/stats`),
-      api.get(`${base}/bookings?date=${today}`),
-    ]).then(([s, b]) => {
-      setStats(s);
-      setBookings(b);
-    }).finally(() => setLoading(false));
-  }, [currentSalon?.id]);
+
+    if (isAllSalons) {
+      const adminSalons = memberships.filter(m => m.role === 'owner' || m.role === 'admin');
+      Promise.all(adminSalons.map(m =>
+        Promise.all([
+          api.get(`/api/salons/${m.salon_id}/admin/stats`),
+          api.get(`/api/salons/${m.salon_id}/admin/bookings?date=${today}`),
+        ])
+      )).then(results => {
+        const merged = { bookings_today: 0, revenue_today: 0, pending_bookings: 0, total_customers: 0 };
+        const allBookings = [];
+        results.forEach(([s, b]) => {
+          merged.bookings_today   += s.bookings_today;
+          merged.revenue_today    += s.revenue_today;
+          merged.pending_bookings += s.pending_bookings;
+          merged.total_customers  += s.total_customers;
+          allBookings.push(...b);
+        });
+        allBookings.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+        setStats(merged);
+        setBookings(allBookings);
+      }).finally(() => setLoading(false));
+    } else {
+      const base = `/api/salons/${currentSalon.id}/admin`;
+      Promise.all([
+        api.get(`${base}/stats`),
+        api.get(`${base}/bookings?date=${today}`),
+      ]).then(([s, b]) => {
+        setStats(s);
+        setBookings(b);
+      }).finally(() => setLoading(false));
+    }
+  }, [currentSalon?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function updateStatus(id, status) {
-    await api.patch(`/api/salons/${currentSalon.id}/admin/bookings/${id}/status`, { status });
+    const salonId = isAllSalons ? bookings.find(b => b.id === id)?.salon_id : currentSalon.id;
+    await api.patch(`/api/salons/${salonId}/admin/bookings/${id}/status`, { status });
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
   }
 
@@ -85,6 +113,8 @@ export default function AdminDashboard() {
                   <div className="booking-day">{new Date(b.starts_at).getDate()}</div>
                 </div>
                 <div className="booking-info">
+                  {isAllSalons && <div className="booking-salon-name">{memberships.find(m => m.salon_id === b.salon_id)?.name}</div>}
+                  <div className="booking-client-name">{b.customer?.full_name || 'Walk-in'}</div>
                   <div className="booking-services">
                     {b.services.map((s, i) => <span key={i} className="tag">{s.name}</span>)}
                   </div>

@@ -211,6 +211,40 @@ router.patch('/staff/:id', async (req, res) => {
   }
 });
 
+// PUT /staff/:id/services — replace all service assignments
+router.put('/staff/:id/services', async (req, res) => {
+  const { salonId } = req.params;
+  const { service_ids } = req.body;
+  if (!Array.isArray(service_ids)) return res.status(400).json({ error: 'service_ids must be an array' });
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM staff_services WHERE staff_id = $1', [req.params.id]);
+    for (const svcId of service_ids) {
+      await client.query('INSERT INTO staff_services (staff_id, service_id) VALUES ($1, $2)', [req.params.id, svcId]);
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update staff services' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /staff/:id/services — get service ids for a staff member
+router.get('/staff/:id/services', async (req, res) => {
+  try {
+    const result = await db.query('SELECT service_id FROM staff_services WHERE staff_id = $1', [req.params.id]);
+    res.json(result.rows.map(r => r.service_id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch staff services' });
+  }
+});
+
 // GET /clients
 router.get('/clients', async (req, res) => {
   const { salonId } = req.params;

@@ -48,9 +48,13 @@ export default function Nav() {
         {hasMultipleSalons && (
           <select
             className="salon-switcher"
-            value={currentSalon?.id ?? ''}
-            onChange={e => switchSalon(Number(e.target.value))}
+            value={currentSalon?.id ?? 'all'}
+            onChange={e => {
+              const val = e.target.value;
+              val === 'all' ? switchSalon('all') : switchSalon(Number(val));
+            }}
           >
+            <option value="all">All Salons</option>
             {memberships.map(m => (
               <option key={m.salon_id} value={m.salon_id}>{m.name}</option>
             ))}

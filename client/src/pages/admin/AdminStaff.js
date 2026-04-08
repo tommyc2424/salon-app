@@ -8,11 +8,13 @@ const EMPTY = { full_name: '', bio: '' };
 export default function AdminStaff({ embedded, salonId: propSalonId }) {
   const { currentSalon } = useSalon();
   const salonId = propSalonId ?? currentSalon?.id;
-  const [staff, setStaff]       = useState([]);
-  const [form, setForm]         = useState(EMPTY);
-  const [editing, setEditing]   = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading]   = useState(true);
+  const [staff, setStaff]             = useState([]);
+  const [services, setServices]       = useState([]);
+  const [form, setForm]               = useState(EMPTY);
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [editing, setEditing]         = useState(null);
+  const [showForm, setShowForm]       = useState(false);
+  const [loading, setLoading]         = useState(true);
 
   // Photo state: 'keep' | 'remove' | File
   const [photoState, setPhotoState]     = useState('keep');
@@ -22,19 +24,29 @@ export default function AdminStaff({ embedded, salonId: propSalonId }) {
 
   useEffect(() => {
     if (!salonId) return;
-    api.get(`/api/salons/${salonId}/admin/staff`).then(setStaff).finally(() => setLoading(false));
+    Promise.all([
+      api.get(`/api/salons/${salonId}/admin/staff`),
+      api.get(`/api/salons/${salonId}/admin/services`),
+    ]).then(([stf, svcs]) => {
+      setStaff(stf);
+      setServices(svcs.filter(s => s.is_active));
+    }).finally(() => setLoading(false));
   }, [salonId]);
 
   function openNew() {
     setForm(EMPTY); setEditing(null); setShowForm(true);
     setPhotoState('keep'); setPhotoPreview('');
+    setSelectedServiceIds([]);
   }
-  function openEdit(s) {
+  async function openEdit(s) {
     setForm({ full_name: s.full_name, bio: s.bio ?? '' });
     setEditing(s.id);
     setShowForm(true);
     setPhotoState('keep');
     setPhotoPreview(s.avatar_url ?? '');
+    // Load existing service assignments
+    const ids = await api.get(`/api/salons/${salonId}/admin/staff/${s.id}/services`).catch(() => []);
+    setSelectedServiceIds(ids);
   }
 
   function handleFileChange(e) {
@@ -75,7 +87,9 @@ export default function AdminStaff({ embedded, salonId: propSalonId }) {
   async function handleSubmit(e) {
     e.preventDefault();
     const base = `/api/salons/${salonId}/admin`;
+    let staffId;
     if (editing) {
+      staffId = editing;
       const avatarUrl = await resolveAvatarUrl(editing);
       const body = { ...form };
       if (avatarUrl !== null) body.avatar_url = avatarUrl || null;
@@ -83,7 +97,7 @@ export default function AdminStaff({ embedded, salonId: propSalonId }) {
       setStaff(prev => prev.map(s => s.id === editing ? { ...s, ...updated } : s));
     } else {
       const created = await api.post(`${base}/staff`, form);
-      // Upload photo for new staff using the returned id
+      staffId = created.id;
       const avatarUrl = await resolveAvatarUrl(created.id);
       if (avatarUrl) {
         const patched = await api.patch(`${base}/staff/${created.id}`, { avatar_url: avatarUrl });
@@ -92,6 +106,8 @@ export default function AdminStaff({ embedded, salonId: propSalonId }) {
         setStaff(prev => [...prev, created]);
       }
     }
+    // Save service assignments
+    await api.put(`${base}/staff/${staffId}/services`, { service_ids: selectedServiceIds });
     setShowForm(false);
   }
 
@@ -120,6 +136,30 @@ export default function AdminStaff({ embedded, salonId: propSalonId }) {
             <div className="form-row">
               <label>Bio</label>
               <textarea rows={3} value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} />
+            </div>
+            <div className="form-row">
+              <label>Services Performed</label>
+              <div className="staff-services-grid">
+                {services.length === 0 ? (
+                  <p className="settings-hint">No services found. Add services first.</p>
+                ) : services.map(svc => (
+                  <label key={svc.id} className="staff-service-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedServiceIds.includes(svc.id)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedServiceIds(prev => [...prev, svc.id]);
+                        } else {
+                          setSelectedServiceIds(prev => prev.filter(id => id !== svc.id));
+                        }
+                      }}
+                    />
+                    <span>{svc.name}</span>
+                    <span className="settings-hint">${Number(svc.price).toFixed(0)} · {svc.duration_minutes}min</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="form-row">
               <label>Photo</label>

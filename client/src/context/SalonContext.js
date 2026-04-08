@@ -79,11 +79,18 @@ export function SalonProvider({ children }) {
       .finally(() => setLoading(false));
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const salonRole = currentSalon
-    ? (memberships.find(m => m.salon_id === currentSalon.id)?.role ?? null)
-    : null;
+  const isAllSalons = currentSalon?.id === 'all';
+  const salonRole = isAllSalons
+    ? memberships[0]?.role ?? null
+    : currentSalon
+      ? (memberships.find(m => m.salon_id === currentSalon.id)?.role ?? null)
+      : null;
 
   function switchSalon(salonId) {
+    if (salonId === 'all') {
+      setCurrentSalon({ id: 'all', name: 'All Salons', slug: null, logo_url: null, settings: {} });
+      return;
+    }
     const m = memberships.find(m => m.salon_id === salonId);
     if (m) setCurrentSalon({ id: m.salon_id, name: m.name, slug: m.slug, logo_url: m.logo_url, settings: m.settings ?? {} });
   }
@@ -117,7 +124,7 @@ export function SalonProvider({ children }) {
   return (
     <SalonContext.Provider value={{
       memberships, currentSalon, setCurrentSalon, switchSalon,
-      salonRole, loading, updateCurrentSalon,
+      salonRole, loading, updateCurrentSalon, isAllSalons,
     }}>
       {children}
     </SalonContext.Provider>
