@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-const BASE_URL = process.env.REACT_APP_API_URL;
+const BASE_URL = process.env.REACT_APP_API_URL || '';
 
 async function apiFetch(path, options = {}) {
   const { data: { session } } = await supabase.auth.getSession();
