@@ -165,11 +165,6 @@ export default function PublicLanding() {
               style={{ background: color }}
               onClick={e => { e.preventDefault(); startBooking(); }}
             >Book Now</a>
-            <a
-              href="#"
-              className="public-nav-login"
-              onClick={e => { e.preventDefault(); navigate(`/s/${slug}`); }}
-            >Log In</a>
           </div>
           <button
             className="public-nav-toggle"
@@ -189,6 +184,11 @@ export default function PublicLanding() {
               onClick={e => { e.preventDefault(); goToSection(s.id); }}
             >{s.label}</a>
           ))}
+          <a
+            href="#"
+            className="public-nav-login"
+            onClick={e => { e.preventDefault(); navigate(`/s/${slug}`); }}
+          >Log In</a>
         </div>
       </nav>
 
