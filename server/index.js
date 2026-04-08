@@ -54,7 +54,7 @@ app.use('/api/salons/:salonId', salonRouter);
 // Serve React frontend in production
 const clientBuild = path.join(__dirname, '..', 'client', 'build');
 app.use(express.static(clientBuild));
-app.get('*', (_req, res) => {
+app.get('/{*path}', (_req, res) => {
   res.sendFile(path.join(clientBuild, 'index.html'));
 });
 
