@@ -41,11 +41,11 @@ router.post('/', async (req, res) => {
         [customerId, full_name, phone || null]
       );
     } else {
-      // User already exists — look up by email using getUserByEmail
-      const { data: { user: existingUser }, error: lookupErr } =
-        await supabase.auth.admin.getUserByEmail(email.toLowerCase());
-      if (lookupErr || !existingUser) throw new Error('Could not find or create user');
-      customerId = existingUser.id;
+      // User already exists — look up via listUsers
+      const { data: allUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const existing = allUsers?.users?.find(u => u.email === email.toLowerCase());
+      if (!existing) throw new Error(createError?.message || 'Could not find or create user');
+      customerId = existing.id;
     }
 
     // 2. Fetch services for price/duration
