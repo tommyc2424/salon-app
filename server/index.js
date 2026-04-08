@@ -9,7 +9,19 @@ const { requireAuth, requireSalonRole } = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.supabase.co"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co"],
+      frameSrc: ["'self'", "https://www.google.com"],
+    },
+  },
+}));
 app.use(cors());
 app.use(express.json());
 
