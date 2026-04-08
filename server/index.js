@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 require('dotenv').config();
 
 const { requireAuth, requireSalonRole } = require('./middleware/auth');
@@ -49,6 +50,13 @@ salonRouter.use('/admin',
 );
 
 app.use('/api/salons/:salonId', salonRouter);
+
+// Serve React frontend in production
+const clientBuild = path.join(__dirname, '..', 'client', 'build');
+app.use(express.static(clientBuild));
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientBuild, 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
